@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MF Ratings Lookup</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0ede6;
+    --border: rgba(0,0,0,0.1);
+    --border-strong: rgba(0,0,0,0.2);
+    --text: #1a1a18;
+    --text-muted: #6b6a65;
+    --accent: #1d5c8a;
+    --accent-light: #e6f1fb;
+    --accent-text: #0c447c;
+    --success: #3b6d11;
+    --success-bg: #eaf3de;
+    --warn: #854f0b;
+    --warn-bg: #faeeda;
+    --danger: #a32d2d;
+    --danger-bg: #fcebeb;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --surface: #252522;
+      --surface2: #2e2e2b;
+      --border: rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.15);
+      --text: #e8e6df;
+      --text-muted: #9a9890;
+      --accent: #378add;
+      --accent-light: #042c53;
+      --accent-text: #85b7eb;
+      --success: #97c459;
+      --success-bg: #173404;
+      --warn: #ef9f27;
+      --warn-bg: #412402;
+      --danger: #f09595;
+      --danger-bg: #501313;
+    }
+  }
+
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  header {
+    margin-bottom: 2.5rem;
+  }
+
+  .logo-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+  }
+
+  .logo-icon {
+    width: 38px; height: 38px;
+    background: var(--accent);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .logo-icon svg { width: 22px; height: 22px; fill: white; }
+
+  h1 {
+    font-size: 1.75rem;
+    font-weight: normal;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .subtitle {
+    font-family: system-ui, sans-serif;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-left: 50px;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .step-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+  }
+
+  .step-num {
+    font-family: system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .step-label {
+    font-size: 0.95rem;
+    font-weight: normal;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .upload-zone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    background: var(--surface2);
+    position: relative;
+  }
+
+  .upload-zone:hover, .upload-zone.drag-over {
+    background: var(--accent-light);
+    border-color: var(--accent);
+  }
+
+  .upload-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+
+  .upload-zone .uz-icon {
+    font-size: 20px; display: block; margin-bottom: 4px;
+  }
+
+  .upload-zone .uz-text {
+    font-family: system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .upload-zone.loaded {
+    border-color: var(--success);
+    background: var(--success-bg);
+  }
+
+  .upload-zone.loaded .uz-text { color: var(--success); }
+
+  .threshold-row {
+    display: flex; align-items: center; gap: 10px; margin-top: 10px;
+  }
+
+  .threshold-row label {
+    font-family: system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .threshold-row input[type=range] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+
+  .threshold-row span {
+    font-family: system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 32px;
+    text-align: right;
+    color: var(--text);
+  }
+
+  .run-btn {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1.5rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-family: system-ui, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    margin-bottom: 2rem;
+  }
+
+  .run-btn:hover { opacity: 0.9; }
+  .run-btn:active { transform: scale(0.99); }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status-bar {
+    font-family: system-ui, sans-serif;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 1.5rem;
+    display: none;
+  }
+
+  .status-bar.info { background: var(--accent-light); color: var(--accent-text); }
+  .status-bar.warn { background: var(--warn-bg); color: var(--warn); }
+  .status-bar.ok   { background: var(--success-bg); color: var(--success); }
+
+  .results-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem; flex-wrap: wrap; gap: 8px;
+  }
+
+  .results-header h2 {
+    font-size: 1.1rem;
+    font-weight: normal;
+  }
+
+  .results-actions { display: flex; gap: 8px; }
+
+  .btn-sm {
+    font-family: system-ui, sans-serif;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .btn-sm:hover { background: var(--surface2); }
+
+  .stats-row {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.5rem;
+  }
+
+  .stat-chip {
+    font-family: system-ui, sans-serif;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 100px;
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  .stat-chip b { color: var(--text); font-weight: 500; }
+
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    font-family: system-ui, sans-serif;
+    font-size: 13px;
+  }
+
+  thead th {
+    background: var(--surface2);
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 0.5px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody tr { border-bottom: 0.5px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+
+  td { padding: 10px 14px; vertical-align: top; line-height: 1.5; }
+
+  td.mf-name { font-weight: 500; max-width: 220px; }
+  td.matched-name { color: var(--text-muted); font-size: 12px; max-width: 220px; }
+  td.score { text-align: center; }
+
+  .score-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .score-high { background: var(--success-bg); color: var(--success); }
+  .score-mid  { background: var(--warn-bg);    color: var(--warn); }
+  .score-low  { background: var(--danger-bg);  color: var(--danger); }
+
+  .no-match {
+    font-style: italic;
+    color: var(--danger);
+    font-size: 12px;
+  }
+
+  td.reasoning { max-width: 300px; font-size: 12px; color: var(--text-muted); }
+
+  .rating-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 0.5px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .hidden { display: none !important; }
+
+  footer {
+    margin-top: 3rem;
+    font-family: system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3h18v4H3V3zm0 6h12v4H3V9zm0 6h18v4H3v-4z"/>
+        </svg>
+      </div>
+      <h1>MF Ratings Lookup</h1>
+    </div>
+    <p class="subtitle">Upload your master CSV and a list of fund names — get instant ratings, calls &amp; reasoning</p>
+  </header>
+
+  <div class="steps">
+    <!-- Step 1 -->
+    <div class="step-card">
+      <div class="step-num">Step 1</div>
+      <div class="step-label">Load master ratings CSV</div>
+      <div class="upload-zone" id="zone-csv">
+        <input type="file" id="input-csv" accept=".csv" />
+        <span class="uz-icon">📊</span>
+        <div class="uz-text">Click or drag your<br><strong>ratings CSV</strong> here</div>
+      </div>
+      <div style="margin-top:10px; font-family:system-ui,sans-serif; font-size:12px; color:var(--text-muted)" id="csv-col-hint"></div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step-card">
+      <div class="step-num">Step 2</div>
+      <div class="step-label">Upload your MF names (Excel / CSV)</div>
+      <div class="upload-zone" id="zone-mf">
+        <input type="file" id="input-mf" accept=".xlsx,.xls,.csv" />
+        <span class="uz-icon">📋</span>
+        <div class="uz-text">Click or drag your<br><strong>Excel / CSV</strong> of fund names</div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step-card">
+      <div class="step-num">Step 3</div>
+      <div class="step-label">Fuzzy match sensitivity</div>
+      <p style="font-family:system-ui,sans-serif;font-size:12px;color:var(--text-muted);margin-bottom:10px">
+        Higher = stricter match. Lower = more lenient (catches more name variants).
+      </p>
+      <div class="threshold-row">
+        <label>Threshold</label>
+        <input type="range" id="threshold" min="30" max="90" value="55" step="5" />
+        <span id="thresh-val">55%</span>
+      </div>
+      <div style="margin-top:14px; font-family:system-ui,sans-serif; font-size:12px; color:var(--text-muted)">
+        Tip: Try 50–60% for best results with name variants like "flexi cap" vs "flexicap".
+      </div>
+    </div>
+  </div>
+
+  <button class="run-btn" id="run-btn" disabled>Match &amp; Lookup Ratings</button>
+
+  <div class="status-bar" id="status-bar"></div>
+
+  <!-- Results -->
+  <div id="results-section" class="hidden">
+    <div class="results-header">
+      <h2 id="results-title">Results</h2>
+      <div class="results-actions">
+        <button class="btn-sm" id="export-xlsx">Download Excel</button>
+        <button class="btn-sm" id="export-csv">Download CSV</button>
+      </div>
+    </div>
+
+    <div class="stats-row" id="stats-row"></div>
+
+    <div class="table-wrap">
+      <table id="results-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Your Fund Name</th>
+            <th>Matched Fund</th>
+            <th>Match %</th>
+            <th>Rating</th>
+            <th>Call</th>
+            <th>Reasoning</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>All processing happens locally in your browser. No data is uploaded to any server.</footer>
+</div>
+
+<script>
+/* ── State ── */
+let masterData = [];     // parsed CSV rows
+let masterNames = [];    // normalised names for fuzzy
+let inputFunds = [];     // fund names from user's excel
+let colMap = {};         // {name, rating, call, reasoning} → actual CSV col names
+
+/* ── Utilities ── */
+function norm(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\b(direct|growth|regular|plan|fund|scheme|option|dividend|idcw|reinvestment|payout)\b/g, ' ')
+    .replace(/flexicap/g, 'flexi cap')
+    .replace(/multicap/g, 'multi cap')
+    .replace(/largecap/g, 'large cap')
+    .replace(/midcap/g, 'mid cap')
+    .replace(/smallcap/g, 'small cap')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenSet(s) { return new Set(s.split(' ').filter(Boolean)); }
+
+function jaccardSim(a, b) {
+  const sa = tokenSet(norm(a)), sb = tokenSet(norm(b));
+  if (!sa.size && !sb.size) return 100;
+  const inter = [...sa].filter(x => sb.has(x)).length;
+  const union = new Set([...sa, ...sb]).size;
+  return Math.round((inter / union) * 100);
+}
+
+/* bigram similarity for char-level matching */
+function bigrams(s) {
+  const out = new Set();
+  for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i+2));
+  return out;
+}
+
+function bigramSim(a, b) {
+  const na = norm(a), nb = norm(b);
+  const ba = bigrams(na), bb = bigrams(nb);
+  if (!ba.size && !bb.size) return 100;
+  const inter = [...ba].filter(x => bb.has(x)).length;
+  const union = new Set([...ba, ...bb]).size;
+  return Math.round((inter / union) * 100);
+}
+
+function similarity(a, b) {
+  return Math.round((jaccardSim(a, b) * 0.6) + (bigramSim(a, b) * 0.4));
+}
+
+function bestMatch(query, threshold) {
+  let best = null, bestScore = -1;
+  const qn = norm(query);
+  masterNames.forEach((mn, i) => {
+    const sc = similarity(qn, mn);
+    if (sc > bestScore) { bestScore = sc; best = i; }
+  });
+  if (best === null || bestScore < threshold) return null;
+  return { row: masterData[best], score: bestScore };
+}
+
+/* ── Detect columns ── */
+function detectCols(headers) {
+  const h = headers.map(x => (x||'').toLowerCase().trim());
+  const find = (...keys) => {
+    for (const k of keys) {
+      const i = h.findIndex(x => x.includes(k));
+      if (i >= 0) return headers[i];
+    }
+    return null;
+  };
+  return {
+    name:      find('scheme name','fund name','name','scheme','mf name'),
+    rating:    find('rating','star','rank','grade'),
+    call:      find('call','recommendation','action','buy','sell','view'),
+    reasoning: find('reason','rationale','comment','note','remark','detail','analysis')
+  };
+}
+
+/* ── CSV load ── */
+function loadCSV(file) {
+  return new Promise((res, rej) => {
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true,
+      complete: r => res(r),
+      error: e => rej(e)
+    });
+  });
+}
+
+/* ── Excel / CSV fund names load ── */
+function loadFundNames(file) {
+  return new Promise((res, rej) => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'csv') {
+      Papa.parse(file, {
+        header: false, skipEmptyLines: true,
+        complete: r => {
+          const names = r.data.map(row => {
+            const v = row[0] || '';
+            return typeof v === 'string' ? v.trim() : String(v).trim();
+          }).filter(Boolean);
+          res(names);
+        },
+        error: rej
+      });
+    } else {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          const names = [];
+          rows.forEach(row => {
+            row.forEach(cell => {
+              const v = (cell || '').toString().trim();
+              if (v && v.toLowerCase() !== 'fund name' && v.toLowerCase() !== 'scheme name' && v.toLowerCase() !== 'name') {
+                names.push(v);
+              }
+            });
+          });
+          res([...new Set(names)].filter(Boolean));
+        } catch(err) { rej(err); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  });
+}
+
+/* ── UI helpers ── */
+function setStatus(msg, type='info') {
+  const el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.className = 'status-bar ' + type;
+  el.style.display = 'block';
+}
+
+function updateRunBtn() {
+  const ok = masterData.length > 0 && inputFunds.length > 0;
+  document.getElementById('run-btn').disabled = !ok;
+}
+
+/* ── File zone interactions ── */
+['csv','mf'].forEach(key => {
+  const zone = document.getElementById('zone-'+key);
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); handleFile(key, e.dataTransfer.files[0]); });
+});
+
+document.getElementById('input-csv').addEventListener('change', e => handleFile('csv', e.target.files[0]));
+document.getElementById('input-mf').addEventListener('change', e => handleFile('mf', e.target.files[0]));
+
+async function handleFile(key, file) {
+  if (!file) return;
+  if (key === 'csv') {
+    try {
+      setStatus('Parsing master CSV…', 'info');
+      const result = await loadCSV(file);
+      masterData = result.data;
+      const headers = result.meta.fields || [];
+      colMap = detectCols(headers);
+      masterNames = masterData.map(row => norm(row[colMap.name] || ''));
+
+      const zone = document.getElementById('zone-csv');
+      zone.querySelector('.uz-text').innerHTML = `<strong>${file.name}</strong><br>${masterData.length.toLocaleString()} funds loaded`;
+      zone.classList.add('loaded');
+
+      const hint = document.getElementById('csv-col-hint');
+      if (colMap.name) {
+        hint.textContent = `Detected: name="${colMap.name}", rating="${colMap.rating||'?'}", call="${colMap.call||'?'}", reasoning="${colMap.reasoning||'?'}"`;
+      } else {
+        hint.textContent = '⚠ Could not auto-detect column names. Check CSV header row.';
+      }
+
+      setStatus(`Loaded ${masterData.length.toLocaleString()} funds from CSV.`, 'ok');
+      updateRunBtn();
+    } catch(e) { setStatus('Error reading CSV: '+e.message, 'warn'); }
+  } else {
+    try {
+      setStatus('Reading fund names…', 'info');
+      inputFunds = await loadFundNames(file);
+      const zone = document.getElementById('zone-mf');
+      zone.querySelector('.uz-text').innerHTML = `<strong>${file.name}</strong><br>${inputFunds.length} fund names`;
+      zone.classList.add('loaded');
+      setStatus(`Loaded ${inputFunds.length} fund names.`, 'ok');
+      updateRunBtn();
+    } catch(e) { setStatus('Error reading file: '+e.message, 'warn'); }
+  }
+}
+
+/* ── Threshold slider ── */
+document.getElementById('threshold').addEventListener('input', function() {
+  document.getElementById('thresh-val').textContent = this.value + '%';
+});
+
+/* ── Run matching ── */
+let lastResults = [];
+
+document.getElementById('run-btn').addEventListener('click', () => {
+  const threshold = parseInt(document.getElementById('threshold').value);
+  setStatus('Matching funds…', 'info');
+
+  setTimeout(() => {
+    lastResults = inputFunds.map(name => {
+      const m = bestMatch(name, threshold);
+      if (!m) return { input: name, matched: null, score: 0, rating: '', call: '', reasoning: '' };
+      const row = m.row;
+      return {
+        input: name,
+        matched: row[colMap.name] || '',
+        score: m.score,
+        rating: colMap.rating ? (row[colMap.rating] || '') : '',
+        call: colMap.call ? (row[colMap.call] || '') : '',
+        reasoning: colMap.reasoning ? (row[colMap.reasoning] || '') : ''
+      };
+    });
+
+    renderResults(lastResults, threshold);
+    setStatus(`Done! Matched ${lastResults.filter(r=>r.matched).length} of ${lastResults.length} funds.`, 'ok');
+  }, 50);
+});
+
+function renderResults(results, threshold) {
+  const matched = results.filter(r => r.matched).length;
+  const unmatched = results.length - matched;
+
+  document.getElementById('results-title').textContent = `Results — ${results.length} funds`;
+
+  const statsRow = document.getElementById('stats-row');
+  statsRow.innerHTML = `
+    <div class="stat-chip"><b>${results.length}</b> queried</div>
+    <div class="stat-chip" style="background:var(--success-bg);border-color:var(--success);color:var(--success)"><b>${matched}</b> matched</div>
+    ${unmatched ? `<div class="stat-chip" style="background:var(--danger-bg);border-color:var(--danger);color:var(--danger)"><b>${unmatched}</b> not found</div>` : ''}
+    <div class="stat-chip">threshold: <b>${threshold}%</b></div>
+  `;
+
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = results.map((r, i) => {
+    const scoreClass = r.score >= 75 ? 'score-high' : r.score >= 55 ? 'score-mid' : 'score-low';
+    return `<tr>
+      <td style="color:var(--text-muted)">${i+1}</td>
+      <td class="mf-name">${escHtml(r.input)}</td>
+      <td class="matched-name">${r.matched ? escHtml(r.matched) : '<span class="no-match">No match found</span>'}</td>
+      <td class="score">${r.matched ? `<span class="score-pill ${scoreClass}">${r.score}%</span>` : '—'}</td>
+      <td>${r.rating ? `<span class="rating-badge">${escHtml(r.rating)}</span>` : '—'}</td>
+      <td>${escHtml(r.call) || '—'}</td>
+      <td class="reasoning">${escHtml(r.reasoning) || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('results-section').classList.remove('hidden');
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Export ── */
+document.getElementById('export-csv').addEventListener('click', () => {
+  const rows = [['Input Fund Name','Matched Fund','Match %','Rating','Call','Reasoning'],
+    ...lastResults.map(r => [r.input, r.matched||'', r.score||'', r.rating, r.call, r.reasoning])];
+  const csv = Papa.unparse(rows);
+  download(new Blob([csv], {type:'text/csv'}), 'mf_ratings_results.csv');
+});
+
+document.getElementById('export-xlsx').addEventListener('click', () => {
+  const rows = [['Input Fund Name','Matched Fund','Match %','Rating','Call','Reasoning'],
+    ...lastResults.map(r => [r.input, r.matched||'', r.score||'', r.rating, r.call, r.reasoning])];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:35},{wch:40},{wch:10},{wch:12},{wch:18},{wch:60}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'MF Results');
+  XLSX.writeFile(wb, 'mf_ratings_results.xlsx');
+});
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+</script>
+</body>
+</html>
